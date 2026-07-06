@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Stack,
@@ -14,6 +14,7 @@ import {
   MenuItem,
   ListSubheader,
   ListItemIcon,
+  CircularProgress,
   useMediaQuery,
 } from '@mui/material';
 import { ThemeProvider } from '@mui/material/styles';
@@ -29,8 +30,11 @@ import ViewSidebarIcon from '@mui/icons-material/ViewSidebarOutlined';
 import { getTheme, THEME_LIST, DEFAULT_THEME } from './theme';
 import { SAMPLE_MARKDOWN } from './sample';
 import Editor from './components/Editor';
-import MarkdownPreview from './components/MarkdownPreview';
 import Sidebar from './components/Sidebar';
+
+// Lazy-loaded so react-markdown + highlight.js land in a deferred chunk and
+// don't block the initial shell from painting.
+const MarkdownPreview = lazy(() => import('./components/MarkdownPreview'));
 
 const DOCS_KEY = 'markdown-viewer:docs';
 const ACTIVE_KEY = 'markdown-viewer:active';
@@ -383,7 +387,15 @@ export default function App() {
                 <span>Preview</span>
               </Box>
               <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-                <MarkdownPreview source={markdown} />
+                <Suspense
+                  fallback={
+                    <Box sx={{ display: 'flex', justifyContent: 'center', pt: 6 }}>
+                      <CircularProgress size={22} />
+                    </Box>
+                  }
+                >
+                  <MarkdownPreview source={markdown} />
+                </Suspense>
               </Box>
             </Box>
           )}
