@@ -27,7 +27,7 @@ import PaletteIcon from '@mui/icons-material/PaletteOutlined';
 import CheckIcon from '@mui/icons-material/CheckOutlined';
 import ViewSidebarIcon from '@mui/icons-material/ViewSidebarOutlined';
 
-import { getTheme, THEME_LIST, DEFAULT_THEME } from './theme';
+import { getTheme, THEME_LIST } from './theme';
 import { SAMPLE_MARKDOWN } from './sample';
 import Editor from './components/Editor';
 import Sidebar from './components/Sidebar';
@@ -64,9 +64,15 @@ const safeFile = (name) => name.replace(/[^\w.-]+/g, '_') || 'document';
 export default function App() {
   const isSmall = useMediaQuery('(max-width:900px)');
 
-  const [themeId, setThemeId] = useState(
-    () => localStorage.getItem(THEME_KEY) || DEFAULT_THEME
-  );
+  const [themeId, setThemeId] = useState(() => {
+    const stored = localStorage.getItem(THEME_KEY);
+    if (stored) return stored;
+    // First visit: follow the browser's color-scheme preference.
+    const prefersDark =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+    return prefersDark ? 'graphite' : 'primer';
+  });
   const [docs, setDocs] = useState(loadInitialDocs);
   const [activeId, setActiveId] = useState(() => {
     const stored = localStorage.getItem(ACTIVE_KEY);
