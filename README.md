@@ -6,14 +6,18 @@ drop `.md` files to view them.
 
 ## Features
 
+- **Multi-document workspace** — keep several documents open, switch between
+  them in the left sidebar, and rename (double-click) or close them
 - **Live editing** with an instant split-pane preview
-- **Upload** or **drag & drop** `.md` / `.markdown` / `.txt` files
-- **Download** and **copy** your document
+- **Upload** or **drag & drop** `.md` / `.markdown` / `.txt` files (each opens
+  as its own document)
+- **Download** and **copy** the active document
 - **GitHub Flavored Markdown** — tables, task lists, strikethrough, autolinks
 - **Syntax-highlighted** code blocks (highlight.js)
-- **Light / dark** theme, with your content auto-saved to the browser
+- **Six themes** — Light: *Primer*, *Manuscript*, *Porcelain* · Dark:
+  *Graphite*, *Night*, *Terminal* (a green-phosphor CRT theme)
 - Three view modes: editor only, split, or preview only
-- Warm, editorial "paper" aesthetic with serif reading typography
+- Documents, active tab, and theme are all auto-saved to the browser
 
 ## Getting started
 
