@@ -39,7 +39,12 @@ const MarkdownPreview = lazy(() => import('./components/MarkdownPreview'));
 const DOCS_KEY = 'markdown-viewer:docs';
 const ACTIVE_KEY = 'markdown-viewer:active';
 const THEME_KEY = 'markdown-viewer:theme';
+const SPLIT_KEY = 'markdown-viewer:split';
 const LEGACY_KEY = 'markdown-viewer:content';
+
+// Editor's share of the split view. Clamped so neither pane drops below 20%.
+const MIN_SPLIT = 0.2;
+const clampSplit = (r) => Math.min(1 - MIN_SPLIT, Math.max(MIN_SPLIT, r));
 
 const uid = () =>
   typeof crypto !== 'undefined' && crypto.randomUUID
@@ -80,7 +85,13 @@ export default function App() {
   const [dragOver, setDragOver] = useState(false);
   const [snack, setSnack] = useState('');
   const [themeAnchor, setThemeAnchor] = useState(null);
+  const [splitRatio, setSplitRatio] = useState(() => {
+    const stored = parseFloat(localStorage.getItem(SPLIT_KEY));
+    return Number.isFinite(stored) ? clampSplit(stored) : 0.5;
+  });
   const fileInputRef = useRef(null);
+  const splitRef = useRef(null);
+  const draggingRef = useRef(false);
 
   const theme = useMemo(() => getTheme(themeId), [themeId]);
   const e = theme.editorial;
@@ -105,8 +116,40 @@ export default function App() {
     return () => clearTimeout(id);
   }, [docs]);
 
+  useEffect(() => {
+    localStorage.setItem(SPLIT_KEY, String(splitRatio));
+  }, [splitRatio]);
+
   const effectiveView = isSmall && view === 'split' ? 'preview' : view;
   const showSidebar = sidebarOpen && !isSmall;
+
+  // ---- Split divider drag ----
+  const startDividerDrag = useCallback((ev) => {
+    ev.preventDefault();
+    draggingRef.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, []);
+
+  useEffect(() => {
+    const onMove = (ev) => {
+      if (!draggingRef.current || !splitRef.current) return;
+      const rect = splitRef.current.getBoundingClientRect();
+      if (rect.width) setSplitRatio(clampSplit((ev.clientX - rect.left) / rect.width));
+    };
+    const onUp = () => {
+      if (!draggingRef.current) return;
+      draggingRef.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+  }, []);
 
   // ---- Document operations ----
   const updateActiveContent = useCallback(
@@ -194,6 +237,7 @@ export default function App() {
 
   const showEditor = effectiveView === 'edit' || effectiveView === 'split';
   const showPreview = effectiveView === 'preview' || effectiveView === 'split';
+  const isSplit = showEditor && showPreview;
 
   const cardSx = {
     display: 'flex',
@@ -368,40 +412,86 @@ export default function App() {
             />
           )}
 
-          {showEditor && (
-            <Box sx={{ ...cardSx, bgcolor: e.cardBg }}>
-              <Box sx={cardHeaderSx}>
-                <Typography noWrap sx={{ fontSize: 12, letterSpacing: '0.08em', maxWidth: '60%' }}>
-                  {activeDoc?.name || 'Editor'}
-                </Typography>
-                <span>
-                  {stats.words} words · {stats.chars} chars
-                </span>
+          <Box
+            ref={splitRef}
+            sx={{ flex: 1, display: 'flex', minWidth: 0, minHeight: 0, gap: isSplit ? 0 : 2 }}
+          >
+            {showEditor && (
+              <Box
+                sx={{
+                  ...cardSx,
+                  bgcolor: e.cardBg,
+                  ...(isSplit && {
+                    flex: 'none',
+                    flexBasis: `${splitRatio * 100}%`,
+                  }),
+                }}
+              >
+                <Box sx={cardHeaderSx}>
+                  <Typography noWrap sx={{ fontSize: 12, letterSpacing: '0.08em', maxWidth: '60%' }}>
+                    {activeDoc?.name || 'Editor'}
+                  </Typography>
+                  <span>
+                    {stats.words} words · {stats.chars} chars
+                  </span>
+                </Box>
+                <Box sx={{ flex: 1, minHeight: 0, display: 'flex' }}>
+                  <Editor value={markdown} onChange={updateActiveContent} />
+                </Box>
               </Box>
-              <Box sx={{ flex: 1, minHeight: 0, display: 'flex' }}>
-                <Editor value={markdown} onChange={updateActiveContent} />
-              </Box>
-            </Box>
-          )}
+            )}
 
-          {showPreview && (
-            <Box sx={{ ...cardSx, bgcolor: e.readerBg }}>
-              <Box sx={cardHeaderSx}>
-                <span>Preview</span>
+            {isSplit && (
+              <Box
+                role="separator"
+                aria-orientation="vertical"
+                onPointerDown={startDividerDrag}
+                onDoubleClick={() => setSplitRatio(0.5)}
+                title="Drag to resize · double-click to reset"
+                sx={{
+                  flex: 'none',
+                  width: '10px',
+                  mx: 0.75,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'col-resize',
+                  touchAction: 'none',
+                  '&:hover .grip, &:active .grip': { bgcolor: 'primary.main' },
+                }}
+              >
+                <Box
+                  className="grip"
+                  sx={{
+                    width: '3px',
+                    height: 44,
+                    borderRadius: 999,
+                    bgcolor: e.line,
+                    transition: 'background-color .15s',
+                  }}
+                />
               </Box>
-              <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-                <Suspense
-                  fallback={
-                    <Box sx={{ display: 'flex', justifyContent: 'center', pt: 6 }}>
-                      <CircularProgress size={22} />
-                    </Box>
-                  }
-                >
-                  <MarkdownPreview source={markdown} />
-                </Suspense>
+            )}
+
+            {showPreview && (
+              <Box sx={{ ...cardSx, bgcolor: e.readerBg }}>
+                <Box sx={cardHeaderSx}>
+                  <span>Preview</span>
+                </Box>
+                <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+                  <Suspense
+                    fallback={
+                      <Box sx={{ display: 'flex', justifyContent: 'center', pt: 6 }}>
+                        <CircularProgress size={22} />
+                      </Box>
+                    }
+                  >
+                    <MarkdownPreview source={markdown} />
+                  </Suspense>
+                </Box>
               </Box>
-            </Box>
-          )}
+            )}
+          </Box>
 
           {dragOver && (
             <Box
