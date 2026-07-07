@@ -165,7 +165,15 @@ const THEMES = {
   },
 };
 
-export const DEFAULT_THEME = 'manuscript';
+// The startup / fallback theme follows the browser's color-scheme preference:
+// Graphite when the OS prefers dark, Primer otherwise. Used both for a first
+// visit (App.jsx) and as getTheme's fallback for an unknown/stale stored id.
+export const defaultThemeId = () => {
+  const prefersDark =
+    typeof window !== 'undefined' &&
+    window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+  return prefersDark ? 'graphite' : 'primer';
+};
 
 export const THEME_LIST = Object.entries(THEMES).map(([id, t]) => ({
   id,
@@ -174,7 +182,7 @@ export const THEME_LIST = Object.entries(THEMES).map(([id, t]) => ({
 }));
 
 export const getTheme = (id) => {
-  const def = THEMES[id] || THEMES[DEFAULT_THEME];
+  const def = THEMES[id] || THEMES[defaultThemeId()];
   const p = def.tokens;
   const theme = createTheme({
     palette: {

@@ -27,7 +27,7 @@ import PaletteIcon from '@mui/icons-material/PaletteOutlined';
 import CheckIcon from '@mui/icons-material/CheckOutlined';
 import ViewSidebarIcon from '@mui/icons-material/ViewSidebarOutlined';
 
-import { getTheme, THEME_LIST } from './theme';
+import { getTheme, THEME_LIST, defaultThemeId } from './theme';
 import { SAMPLE_MARKDOWN } from './sample';
 import Editor from './components/Editor';
 import Sidebar from './components/Sidebar';
@@ -68,10 +68,7 @@ export default function App() {
     const stored = localStorage.getItem(THEME_KEY);
     if (stored) return stored;
     // First visit: follow the browser's color-scheme preference.
-    const prefersDark =
-      typeof window !== 'undefined' &&
-      window.matchMedia?.('(prefers-color-scheme: dark)').matches;
-    return prefersDark ? 'graphite' : 'primer';
+    return defaultThemeId();
   });
   const [docs, setDocs] = useState(loadInitialDocs);
   const [activeId, setActiveId] = useState(() => {
