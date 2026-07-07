@@ -66,6 +66,10 @@ function loadInitialDocs() {
 const baseName = (fileName) => fileName.replace(/\.(md|markdown|txt)$/i, '') || fileName;
 const safeFile = (name) => name.replace(/[^\w.-]+/g, '_') || 'document';
 
+// True only for drags carrying OS files — lets internal drags (doc reordering)
+// pass through without triggering the file-drop overlay.
+const dragHasFiles = (ev) => Array.from(ev.dataTransfer?.types || []).includes('Files');
+
 export default function App() {
   const isSmall = useMediaQuery('(max-width:900px)');
 
@@ -180,6 +184,20 @@ export default function App() {
     []
   );
 
+  // Move the dragged doc to the hovered doc's position (live reorder).
+  const reorderDoc = useCallback((dragId, overId) => {
+    if (dragId === overId) return;
+    setDocs((prev) => {
+      const from = prev.findIndex((d) => d.id === dragId);
+      const to = prev.findIndex((d) => d.id === overId);
+      if (from < 0 || to < 0 || from === to) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  }, []);
+
   const loadFile = useCallback(
     (file) => {
       if (!file) return;
@@ -201,6 +219,7 @@ export default function App() {
 
   const handleDrop = useCallback(
     (ev) => {
+      if (!dragHasFiles(ev)) return; // internal drag (doc reorder) — leave to Sidebar
       ev.preventDefault();
       setDragOver(false);
       Array.from(ev.dataTransfer.files || []).forEach(loadFile);
@@ -279,6 +298,7 @@ export default function App() {
           background: e.bgGradient,
         }}
         onDragOver={(ev) => {
+          if (!dragHasFiles(ev)) return; // ignore internal doc-reorder drags
           ev.preventDefault();
           setDragOver(true);
         }}
@@ -409,6 +429,7 @@ export default function App() {
               onNew={() => addDoc('Untitled', '')}
               onRename={renameDoc}
               onDelete={deleteDoc}
+              onReorder={reorderDoc}
             />
           )}
 

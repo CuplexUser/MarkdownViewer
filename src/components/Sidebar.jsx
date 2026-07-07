@@ -4,12 +4,14 @@ import AddIcon from '@mui/icons-material/AddOutlined';
 import DescriptionIcon from '@mui/icons-material/DescriptionOutlined';
 import CloseIcon from '@mui/icons-material/CloseOutlined';
 
-export default function Sidebar({ docs, activeId, onSelect, onNew, onRename, onDelete }) {
+export default function Sidebar({ docs, activeId, onSelect, onNew, onRename, onDelete, onReorder }) {
   const theme = useTheme();
   const e = theme.editorial;
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState('');
+  const [dragId, setDragId] = useState(null);
   const inputRef = useRef(null);
+  const lastOverRef = useRef(null);
 
   useEffect(() => {
     if (editingId && inputRef.current) inputRef.current.select();
@@ -75,18 +77,42 @@ export default function Sidebar({ docs, activeId, onSelect, onNew, onRename, onD
               direction="row"
               alignItems="center"
               gap={1}
+              draggable={editingId !== doc.id}
               onClick={() => onSelect(doc.id)}
               onDoubleClick={() => startRename(doc)}
+              onDragStart={(ev) => {
+                setDragId(doc.id);
+                lastOverRef.current = doc.id;
+                ev.dataTransfer.effectAllowed = 'move';
+                ev.dataTransfer.setData('text/plain', doc.id);
+              }}
+              onDragEnter={() => {
+                if (dragId && dragId !== doc.id && lastOverRef.current !== doc.id) {
+                  lastOverRef.current = doc.id;
+                  onReorder(dragId, doc.id);
+                }
+              }}
+              onDragOver={(ev) => ev.preventDefault()}
+              onDragEnd={() => {
+                setDragId(null);
+                lastOverRef.current = null;
+              }}
+              onDrop={(ev) => {
+                ev.preventDefault();
+                setDragId(null);
+                lastOverRef.current = null;
+              }}
               sx={{
                 px: 1.25,
                 py: 0.9,
                 mb: 0.5,
                 borderRadius: '12px',
                 cursor: 'pointer',
+                opacity: dragId === doc.id ? 0.4 : 1,
                 color: active ? 'primary.main' : 'text.primary',
                 bgcolor: active ? `${theme.palette.primary.main}1f` : 'transparent',
                 border: `1px solid ${active ? `${theme.palette.primary.main}3d` : 'transparent'}`,
-                transition: 'background-color 120ms ease',
+                transition: 'background-color 120ms ease, opacity 120ms ease',
                 '&:hover': { bgcolor: active ? `${theme.palette.primary.main}26` : e.codeBg },
                 '&:hover .doc-close': { opacity: 1 },
               }}
