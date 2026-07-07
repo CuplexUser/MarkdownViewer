@@ -100,12 +100,9 @@ export default function App() {
   const theme = useMemo(() => getTheme(themeId), [themeId]);
   const e = theme.editorial;
 
+  // Falls back to the first doc when activeId is stale (e.g. the active doc was
+  // deleted), so no separate effect is needed to reconcile activeId.
   const activeDoc = docs.find((d) => d.id === activeId) || docs[0];
-
-  // Keep activeId valid and persisted.
-  useEffect(() => {
-    if (!docs.find((d) => d.id === activeId) && docs[0]) setActiveId(docs[0].id);
-  }, [docs, activeId]);
 
   useEffect(() => {
     localStorage.setItem(THEME_KEY, themeId);
