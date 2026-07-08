@@ -26,6 +26,7 @@ import DescriptionIcon from '@mui/icons-material/DescriptionOutlined';
 import PaletteIcon from '@mui/icons-material/PaletteOutlined';
 import CheckIcon from '@mui/icons-material/CheckOutlined';
 import ViewSidebarIcon from '@mui/icons-material/ViewSidebarOutlined';
+import CodeIcon from '@mui/icons-material/CodeOutlined';
 
 import { getTheme, THEME_LIST, defaultThemeId } from './theme';
 import { SAMPLE_MARKDOWN } from './sample';
@@ -40,6 +41,7 @@ const DOCS_KEY = 'markdown-viewer:docs';
 const ACTIVE_KEY = 'markdown-viewer:active';
 const THEME_KEY = 'markdown-viewer:theme';
 const SPLIT_KEY = 'markdown-viewer:split';
+const HL_KEY = 'markdown-viewer:highlight';
 const LEGACY_KEY = 'markdown-viewer:content';
 
 // Editor's share of the split view. Clamped so neither pane drops below 20%.
@@ -93,6 +95,7 @@ export default function App() {
     const stored = parseFloat(localStorage.getItem(SPLIT_KEY));
     return Number.isFinite(stored) ? clampSplit(stored) : 0.5;
   });
+  const [highlight, setHighlight] = useState(() => localStorage.getItem(HL_KEY) !== 'false');
   const fileInputRef = useRef(null);
   const splitRef = useRef(null);
   const draggingRef = useRef(false);
@@ -120,6 +123,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(SPLIT_KEY, String(splitRatio));
   }, [splitRatio]);
+
+  useEffect(() => {
+    localStorage.setItem(HL_KEY, String(highlight));
+  }, [highlight]);
 
   const effectiveView = isSmall && view === 'split' ? 'preview' : view;
   const showSidebar = sidebarOpen && !isSmall;
@@ -365,6 +372,26 @@ export default function App() {
           />
 
           <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap">
+            <Tooltip title={highlight ? 'Turn off syntax highlighting' : 'Turn on syntax highlighting'}>
+              <ToggleButton
+                value="highlight"
+                selected={highlight}
+                onChange={() => setHighlight((v) => !v)}
+                size="small"
+                sx={{
+                  borderRadius: 999,
+                  px: 1.5,
+                  py: 0.5,
+                  gap: 0.5,
+                  fontSize: 13,
+                  fontWeight: 500,
+                  bgcolor: highlight ? undefined : e.cardBg,
+                }}
+              >
+                <CodeIcon fontSize="small" />
+                Syntax highlight
+              </ToggleButton>
+            </Tooltip>
             <ActionButton
               icon={<UploadFileIcon fontSize="small" />}
               label="File"
@@ -454,7 +481,7 @@ export default function App() {
                   </span>
                 </Box>
                 <Box sx={{ flex: 1, minHeight: 0, display: 'flex' }}>
-                  <Editor value={markdown} onChange={updateActiveContent} />
+                  <Editor value={markdown} onChange={updateActiveContent} highlight={highlight} />
                 </Box>
               </Box>
             )}
