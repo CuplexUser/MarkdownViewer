@@ -95,7 +95,7 @@ export default function App() {
     const stored = parseFloat(localStorage.getItem(SPLIT_KEY));
     return Number.isFinite(stored) ? clampSplit(stored) : 0.5;
   });
-  const [highlight, setHighlight] = useState(() => localStorage.getItem(HL_KEY) !== 'false');
+  const [highlight, setHighlight] = useState(() => localStorage.getItem(HL_KEY) === 'true');
   const fileInputRef = useRef(null);
   const splitRef = useRef(null);
   const draggingRef = useRef(false);
