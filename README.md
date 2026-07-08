@@ -39,28 +39,16 @@ npm run preview   # serve the production build locally
 
 This repo ships with a GitHub Actions workflow
 ([`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)) that builds the
-app and publishes it to GitHub Pages on every push to `main`.
+app on Node 24 (`npm ci` → `npm run build`) and publishes `dist/` to GitHub
+Pages. It runs automatically on every push to `main`, and can also be triggered
+manually from the **Actions** tab.
 
-One-time setup:
+One-time setup: in the repository, go to **Settings → Pages** and set **Source**
+to **GitHub Actions**.
 
-1. Push the project to a GitHub repository:
-
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial commit"
-   git branch -M main
-   git remote add origin https://github.com/<you>/<repo>.git
-   git push -u origin main
-   ```
-
-2. In the repository, go to **Settings → Pages** and set **Source** to
-   **GitHub Actions**.
-
-That's it — the workflow runs on push and deploys automatically. The site works
-at both project pages (`https://<you>.github.io/<repo>/`) and user/org pages
-because the build uses relative asset paths (`base: './'` in `vite.config.js`).
-You can also trigger a deploy manually from the **Actions** tab.
+The site works at both project pages (`https://<you>.github.io/<repo>/`) and
+user/org pages because the build uses relative asset paths (`base: './'` in
+`vite.config.js`).
 
 ## Tech stack
 
