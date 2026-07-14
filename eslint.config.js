@@ -33,4 +33,10 @@ export default [
     files: ['*.config.js'],
     languageOptions: { globals: globals.node },
   },
+  {
+    // Vitest runs with globals: true (vite.config.js), so describe/it/expect/vi
+    // are ambient in test files and the setup file.
+    files: ['src/**/*.test.{js,jsx}', 'src/test/**'],
+    languageOptions: { globals: { ...globals.browser, ...globals.vitest } },
+  },
 ];

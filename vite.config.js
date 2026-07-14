@@ -1,4 +1,5 @@
-import { defineConfig } from 'vite';
+// vitest/config re-exports Vite's defineConfig with the `test` field typed in.
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
 // https://vite.dev/config/
@@ -34,5 +35,14 @@ export default defineConfig({
   server: {
     port: 5173,
     open: true,
+  },
+  test: {
+    environment: 'jsdom',
+    globals: true, // describe/it/expect without imports; also enables RTL auto-cleanup
+    setupFiles: './src/test/setup.js',
+    include: ['src/**/*.test.{js,jsx}'],
+    // Process CSS for real so the highlight.js `?inline` theme imports carry
+    // their actual stylesheet text instead of Vitest's empty-string stub.
+    css: true,
   },
 });
