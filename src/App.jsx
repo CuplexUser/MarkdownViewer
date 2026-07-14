@@ -27,11 +27,14 @@ import PaletteIcon from '@mui/icons-material/PaletteOutlined';
 import CheckIcon from '@mui/icons-material/CheckOutlined';
 import ViewSidebarIcon from '@mui/icons-material/ViewSidebarOutlined';
 import CodeIcon from '@mui/icons-material/CodeOutlined';
+import SearchIcon from '@mui/icons-material/SearchOutlined';
 
 import { getTheme, THEME_LIST, defaultThemeId } from './theme';
 import { SAMPLE_MARKDOWN } from './sample';
+import { buildSearchPattern, findMatches, replaceMatch, replaceAll, replacementText } from './search';
 import Editor from './components/Editor';
 import Sidebar from './components/Sidebar';
+import FindPanel from './components/FindPanel';
 
 // Lazy-loaded so react-markdown + highlight.js land in a deferred chunk and
 // don't block the initial shell from painting.
@@ -96,9 +99,27 @@ export default function App() {
     return Number.isFinite(stored) ? clampSplit(stored) : 0.5;
   });
   const [highlight, setHighlight] = useState(() => localStorage.getItem(HL_KEY) === 'true');
+  // ---- Find/replace state ----
+  const [findOpen, setFindOpen] = useState(false);
+  const [showReplace, setShowReplace] = useState(false);
+  const [query, setQuery] = useState('');
+  const [replaceText, setReplaceText] = useState('');
+  const [findOpts, setFindOpts] = useState({
+    matchCase: false,
+    wholeWord: false,
+    regex: false,
+    allDocs: false,
+  });
+  const [matchCursor, setMatchCursor] = useState(0);
+  // Bumped on explicit navigation (open, query change, step); tells the
+  // editor to select/scroll the current match. Deliberately NOT tied to the
+  // match object itself, which is re-derived on every edit.
+  const [revealKey, setRevealKey] = useState(0);
   const fileInputRef = useRef(null);
   const splitRef = useRef(null);
   const draggingRef = useRef(false);
+  const editorRef = useRef(null);
+  const findInputRef = useRef(null);
 
   const theme = useMemo(() => getTheme(themeId), [themeId]);
   const e = theme.editorial;
@@ -257,6 +278,145 @@ export default function App() {
     const words = markdown.trim() ? markdown.trim().split(/\s+/).length : 0;
     return { words, chars: markdown.length };
   }, [markdown]);
+
+  // ---- Find/replace ----
+  const pattern = useMemo(() => buildSearchPattern(query, findOpts), [query, findOpts]);
+
+  // Matches are derived, never stored: re-deriving from `docs` on every
+  // change means edits, deletes, and doc switches can't leave stale results.
+  const search = useMemo(() => {
+    if (!findOpen || !pattern.source) return { list: [], capped: false };
+    const scope = findOpts.allDocs ? docs : activeDoc ? [activeDoc] : [];
+    let capped = false;
+    const list = scope.flatMap((d) => {
+      const r = findMatches(d.content, pattern.source, pattern.flags);
+      if (r.capped) capped = true;
+      return r.matches.map((m) => ({ ...m, docId: d.id }));
+    });
+    return { list, capped };
+  }, [findOpen, pattern, docs, activeDoc, findOpts.allDocs]);
+
+  const cursor = search.list.length ? Math.min(matchCursor, search.list.length - 1) : 0;
+  const currentMatch = search.list[cursor] || null;
+  const editorMatches = useMemo(
+    () => search.list.filter((m) => m.docId === activeDoc?.id),
+    [search, activeDoc]
+  );
+
+  const openFind = useCallback(
+    (withReplace) => {
+      const sel = editorRef.current?.getSelection();
+      // Seed from the editor selection, but only when it actually changes the
+      // query — otherwise Ctrl+H after stepping (which selects the current
+      // match) would reset the cursor back to the first match.
+      if (sel && !sel.includes('\n') && sel !== query) {
+        setQuery(sel);
+        setMatchCursor(0);
+      }
+      if (withReplace) setShowReplace(true);
+      setFindOpen(true);
+      // Highlights live in the editor — make sure it's visible.
+      if (effectiveView === 'preview') setView(isSmall ? 'edit' : 'split');
+      setRevealKey((k) => k + 1);
+      // Covers re-invocation while already open; the panel focuses itself on
+      // first mount.
+      requestAnimationFrame(() => findInputRef.current?.select());
+    },
+    [effectiveView, isSmall, query]
+  );
+
+  const closeFind = useCallback(() => {
+    setFindOpen(false);
+    editorRef.current?.focus();
+  }, []);
+
+  const handleQueryChange = useCallback((value) => {
+    setQuery(value);
+    setMatchCursor(0);
+    setRevealKey((k) => k + 1);
+  }, []);
+
+  const handleOptionChange = useCallback((key, value) => {
+    setFindOpts((prev) => ({ ...prev, [key]: value }));
+    setMatchCursor(0);
+    setRevealKey((k) => k + 1);
+  }, []);
+
+  const stepMatch = useCallback(
+    (dir) => {
+      const n = search.list.length;
+      if (!n) return;
+      const next = (((cursor + dir) % n) + n) % n;
+      setMatchCursor(next);
+      // Doc jumps happen here (an explicit step), not in an effect, so
+      // manually switching docs mid-search never gets yanked back.
+      const target = search.list[next];
+      if (target.docId !== activeDoc?.id) setActiveId(target.docId);
+      setRevealKey((k) => k + 1);
+    },
+    [search.list, cursor, activeDoc]
+  );
+
+  const handleReplace = useCallback(() => {
+    if (!currentMatch || !activeDoc || !pattern.source) return;
+    if (currentMatch.docId !== activeDoc.id) {
+      // The match isn't on screen — jump to it instead of editing blind.
+      setActiveId(currentMatch.docId);
+      setRevealKey((k) => k + 1);
+      return;
+    }
+    const text = replacementText(
+      activeDoc.content, currentMatch, pattern.source, pattern.flags, replaceText, findOpts.regex
+    );
+    // execCommand path keeps the textarea's native undo stack intact.
+    const ok = editorRef.current?.replaceSelection(currentMatch.start, currentMatch.end, text);
+    if (!ok) {
+      updateActiveContent(
+        replaceMatch(activeDoc.content, currentMatch, pattern.source, pattern.flags, replaceText, findOpts.regex)
+      );
+    }
+    // Cursor stays put — the next match slides into the same index.
+    setRevealKey((k) => k + 1);
+    findInputRef.current?.focus();
+  }, [currentMatch, activeDoc, pattern, replaceText, findOpts.regex, updateActiveContent]);
+
+  const handleReplaceAll = useCallback(() => {
+    if (!search.list.length || !pattern.source) return;
+    const scopeIds = new Set((findOpts.allDocs ? docs : [activeDoc]).filter(Boolean).map((d) => d.id));
+    const count = search.list.length;
+    const docCount = new Set(search.list.map((m) => m.docId)).size;
+    setDocs((prev) =>
+      prev.map((d) =>
+        scopeIds.has(d.id)
+          ? { ...d, content: replaceAll(d.content, pattern.source, pattern.flags, replaceText, findOpts.regex) }
+          : d
+      )
+    );
+    setSnack(
+      `Replaced ${count}${search.capped ? '+' : ''} occurrence${count === 1 ? '' : 's'}` +
+        (docCount > 1 ? ` across ${docCount} documents` : '')
+    );
+  }, [search, pattern, docs, activeDoc, replaceText, findOpts]);
+
+  useEffect(() => {
+    const onKey = (ev) => {
+      const mod = ev.ctrlKey || ev.metaKey;
+      if (mod && !ev.altKey && ev.key.toLowerCase() === 'f') {
+        ev.preventDefault();
+        openFind(false);
+      } else if (mod && !ev.altKey && ev.key.toLowerCase() === 'h') {
+        ev.preventDefault();
+        openFind(true);
+      } else if (ev.key === 'F3' && findOpen) {
+        ev.preventDefault();
+        stepMatch(ev.shiftKey ? -1 : 1);
+      } else if (ev.key === 'Escape' && findOpen) {
+        closeFind();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [openFind, closeFind, stepMatch, findOpen]);
 
   const showEditor = effectiveView === 'edit' || effectiveView === 'split';
   const showPreview = effectiveView === 'preview' || effectiveView === 'split';
@@ -421,6 +581,11 @@ export default function App() {
                 <DeleteOutlineIcon fontSize="small" />
               </IconButton>
             </Tooltip>
+            <Tooltip title="Find (Ctrl+F)">
+              <IconButton size="small" onClick={() => openFind(false)} sx={iconBtnSx(e)}>
+                <SearchIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
             <Tooltip title="Theme">
               <IconButton
                 size="small"
@@ -445,6 +610,30 @@ export default function App() {
             pb: 2.5,
           }}
         >
+          <FindPanel
+            open={findOpen}
+            showReplace={showReplace}
+            onToggleReplace={() => setShowReplace((v) => !v)}
+            query={query}
+            onQueryChange={handleQueryChange}
+            replaceText={replaceText}
+            onReplaceChange={setReplaceText}
+            options={findOpts}
+            onOptionChange={handleOptionChange}
+            matchInfo={{
+              current: search.list.length ? cursor + 1 : 0,
+              total: search.list.length,
+              capped: search.capped,
+              error: pattern.error,
+            }}
+            onNext={() => stepMatch(1)}
+            onPrev={() => stepMatch(-1)}
+            onReplace={handleReplace}
+            onReplaceAll={handleReplaceAll}
+            onClose={closeFind}
+            inputRef={findInputRef}
+          />
+
           {showSidebar && (
             <Sidebar
               docs={docs}
@@ -481,7 +670,15 @@ export default function App() {
                   </span>
                 </Box>
                 <Box sx={{ flex: 1, minHeight: 0, display: 'flex' }}>
-                  <Editor value={markdown} onChange={updateActiveContent} highlight={highlight} />
+                  <Editor
+                    ref={editorRef}
+                    value={markdown}
+                    onChange={updateActiveContent}
+                    highlight={highlight}
+                    matches={editorMatches}
+                    currentMatch={currentMatch?.docId === activeDoc?.id ? currentMatch : null}
+                    revealKey={revealKey}
+                  />
                 </Box>
               </Box>
             )}
