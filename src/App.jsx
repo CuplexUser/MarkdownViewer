@@ -303,6 +303,13 @@ export default function App() {
     [search, activeDoc]
   );
 
+  // Highlights and the current-match selection live in the editor — force it
+  // on screen when a find action needs to show something (opening, stepping,
+  // replacing from preview-only view).
+  const ensureEditorVisible = useCallback(() => {
+    if (effectiveView === 'preview') setView(isSmall ? 'edit' : 'split');
+  }, [effectiveView, isSmall]);
+
   const openFind = useCallback(
     (withReplace) => {
       const sel = editorRef.current?.getSelection();
@@ -315,14 +322,13 @@ export default function App() {
       }
       if (withReplace) setShowReplace(true);
       setFindOpen(true);
-      // Highlights live in the editor — make sure it's visible.
-      if (effectiveView === 'preview') setView(isSmall ? 'edit' : 'split');
+      ensureEditorVisible();
       setRevealKey((k) => k + 1);
       // Covers re-invocation while already open; the panel focuses itself on
       // first mount.
       requestAnimationFrame(() => findInputRef.current?.select());
     },
-    [effectiveView, isSmall, query]
+    [ensureEditorVisible, query]
   );
 
   const closeFind = useCallback(() => {
@@ -352,16 +358,19 @@ export default function App() {
       // manually switching docs mid-search never gets yanked back.
       const target = search.list[next];
       if (target.docId !== activeDoc?.id) setActiveId(target.docId);
+      ensureEditorVisible();
       setRevealKey((k) => k + 1);
     },
-    [search.list, cursor, activeDoc]
+    [search.list, cursor, activeDoc, ensureEditorVisible]
   );
 
   const handleReplace = useCallback(() => {
     if (!currentMatch || !activeDoc || !pattern.source) return;
-    if (currentMatch.docId !== activeDoc.id) {
-      // The match isn't on screen — jump to it instead of editing blind.
+    if (currentMatch.docId !== activeDoc.id || effectiveView === 'preview') {
+      // The match isn't on screen — bring it into view instead of editing
+      // blind (the editor must also be mounted for the undo-friendly path).
       setActiveId(currentMatch.docId);
+      ensureEditorVisible();
       setRevealKey((k) => k + 1);
       return;
     }
@@ -378,7 +387,7 @@ export default function App() {
     // Cursor stays put — the next match slides into the same index.
     setRevealKey((k) => k + 1);
     findInputRef.current?.focus();
-  }, [currentMatch, activeDoc, pattern, replaceText, findOpts.regex, updateActiveContent]);
+  }, [currentMatch, activeDoc, pattern, replaceText, findOpts.regex, updateActiveContent, effectiveView, ensureEditorVisible]);
 
   const handleReplaceAll = useCallback(() => {
     if (!search.list.length || !pattern.source) return;
